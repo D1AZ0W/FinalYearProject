@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard | HelmDetect</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" />
+        <div>
+          <h1 style="font-size: 1.2rem; line-height: 1.1">Kathmandu Valley Traffic Police</h1>
+          <p style="font-size: 0.75rem; letter-spacing: 0.5px; opacity: 0.8">HELMDETECT DASHBOARD</p>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <a href="{{ url_for('index') }}">Monitor</a>
+        <a href="{{ url_for('dashboard') }}" class="active">Fines</a>
+        <a href="{{ url_for('records') }}">Records</a>
+        <a href="{{ url_for('logout') }}" style="color: #ffcccc">Logout</a>
+      </nav>
+    </header>
+
+    <div class="app-container">
+      <aside class="sidebar">
+        <h3>Filter Records</h3>
+        <form action="{{ url_for('dashboard') }}" method="get" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <input type="text" name="search" class="form-control" placeholder="Search ID (#123) or Plate" value="{{ request.args.get('search', '') }}" />
+          <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <label style="font-size: 0.7rem; color: #666; font-weight: 600;">FILTER BY DATE</label>
+            <input type="date" name="date" class="form-control" value="{{ request.args.get('date', '') }}" />
+          </div>
+          <button type="submit" class="btn-primary" style="padding: 0.5rem">Apply Filters</button>
+          {% if request.args.get('search') or request.args.get('date') %}
+            <a href="{{ url_for('dashboard') }}" style="font-size: 0.7rem; color: #999; text-align: center; text-decoration: none;">Clear Filters</a>
+          {% endif %}
+        </form>
+
+        <div style="margin-top: 1.5rem">
+          <h4 style="font-size: 0.8rem; color: var(--primary-blue)">Stats</h4>
+          <p class="text-muted">Currently Pending: {{ rows|length }}</p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <div class="card">
+          <h2>Pending Fines Tracking</h2>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Case ID</th>
+                  <th>Timestamp</th>
+                  <th>Plate Image</th>
+                  <th>Rider Crop</th>
+                  <th>Conf.</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in rows %}
+                <tr>
+                  <td>#{{ row.id }}</td>
+                  <td><span class="text-muted">{{ row.ts }}</span></td>
+                  <td>
+                    <img src="{{ row.plate_image_url }}" class="thumbnail" alt="Plate" onclick="window.open(this.src)" />
+                  </td>
+                  <td>
+                     <img src="{{ row.person_image_url }}" class="thumbnail" alt="Rider" onclick="window.open(this.src)" />
+                  </td>
+                  <td>{{ "%.2f"|format(row.overall_conf) }}</td>
+                  <td><span class="badge badge-pending">Fine Pending</span></td>
+                  <td>
+                    <div style="display: flex; gap: 0.5rem">
+                      <form action="{{ url_for('records') }}" method="get" style="display: inline">
+                        <input type="hidden" name="plate" value="{{ row.plate_number }}" />
+                        <input type="hidden" name="plate_img" value="{{ row.plate_image_url }}" />
+                        <input type="hidden" name="case_id" value="{{ row.id }}" />
+                        <button type="submit" class="btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem">Lookup</button>
+                      </form>
+                      <form action="{{ url_for('close_case', case_id=row.id) }}" method="post" style="display: inline">
+                        <button type="submit" class="btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; background: #dc3545">Close</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

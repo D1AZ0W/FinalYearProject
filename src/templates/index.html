@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live Monitor | HelmDetect</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+</head>
+
+<body>
+  <header class="header">
+    <div class="brand">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" />
+      <div>
+        <h1 style="font-size: 1.2rem; line-height: 1.1">Kathmandu Valley Traffic Police</h1>
+        <p style="font-size: 0.75rem; letter-spacing: 0.5px; opacity: 0.8">HELMDETECT MONITOR</p>
+      </div>
+    </div>
+    <nav class="nav-links">
+      <a href="{{ url_for('index') }}" class="active">Monitor</a>
+      <a href="{{ url_for('dashboard') }}">Fines</a>
+      <a href="{{ url_for('records') }}">Records</a>
+      <a href="{{ url_for('logout') }}" style="color: #ffcccc">Logout</a>
+    </nav>
+  </header>
+
+  <div class="app-container">
+    <aside class="sidebar">
+      <h3>Camera Controls</h3>
+      <a href="{{ url_for('index', source='0') }}"
+        class="btn-link {% if current == '0' or current == 0 %}active{% endif %}">
+        <span>📹</span> Launch Live Camera
+      </a>
+
+      <form action="{{ url_for('index') }}" method="get" style="margin-top: 1.5rem">
+        <label style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; display: block">Video Filename
+          (assets/video/)</label>
+        <input type="text" name="source" class="form-control" placeholder="VID1.mp4" value="{{ current }}"
+          style="margin-bottom: 0.5rem" />
+        <button type="submit" class="btn-primary" style="padding: 0.5rem">Load Video</button>
+      </form>
+    </aside>
+
+    <main class="main-content">
+      <div class="card">
+        <h2>Live Violation Stream</h2>
+        <div class="stream-wrapper">
+          <img src="{{ url_for('video_feed', source=current) }}" alt="Live stream" />
+        </div>
+        <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center">
+          <p class="text-muted">Currently Monitoring: <strong>{{ current }}</strong></p>
+          <div>
+            <span class="badge badge-pending">Detection Running</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+
+</html>
