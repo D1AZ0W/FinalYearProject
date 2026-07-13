@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import mysql.connector
+import psycopg2
+import psycopg2.extras
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -32,16 +33,13 @@ class FineCaseStore:
         self.person_dir.mkdir(parents=True, exist_ok=True)
         self.plate_dir.mkdir(parents=True, exist_ok=True)
         
-        # MariaDB connection config
+        # PostgreSQL connection config
         self.db_config = {
-            "host": "localhost",
-            "user": "root",
-            "password": "root",
-            "database": "helm_detect"
+            "dbname": "helm_detect"
         }
 
     def _get_connection(self):
-        return mysql.connector.connect(**self.db_config)
+        return psycopg2.connect(**self.db_config)
 
     @staticmethod
     def _clamp_bbox(bbox: BBox, width: int, height: int) -> BBox:
@@ -77,6 +75,7 @@ class FineCaseStore:
             INSERT INTO fine_cases
             (ts, source, status, overall_conf, no_helmet_conf, plate_conf, plate_number, frame_idx, person_path, plate_path)
             VALUES (%s, %s, 'fine_pending', %s, %s, %s, 'ID REQUIRED', %s, %s, %s)
+            RETURNING id
             """,
             (
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -89,7 +88,7 @@ class FineCaseStore:
                 plate_path,
             ),
         )
-        row_id = cur.lastrowid
+        row_id = cur.fetchone()[0]
         conn.commit()
         cur.close()
         conn.close()
@@ -141,7 +140,7 @@ class FineCaseStore:
 
     def get_pending_cases(self, limit: int = 500, search_query: Optional[str] = None, date_filter: Optional[str] = None) -> List[Dict]:
         conn = self._get_connection()
-        cur = conn.cursor(dictionary=True)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         query = "SELECT * FROM fine_cases WHERE status = 'fine_pending'"
         params = []
@@ -171,7 +170,7 @@ class FineCaseStore:
 
     def get_all_records(self, search_query: Optional[str] = None) -> List[Dict]:
         conn = self._get_connection()
-        cur = conn.cursor(dictionary=True)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         query = "SELECT * FROM government_records"
         params = []

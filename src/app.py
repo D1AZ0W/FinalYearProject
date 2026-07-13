@@ -8,7 +8,9 @@ from flask import Flask, Response, abort, redirect, render_template, request, se
 from ultralytics import YOLO
 
 from fine_capture import FineCandidate, FineCaseStore
+import torch
 
+torch.backends.mkldnn.enabled = False
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -22,7 +24,7 @@ def _resolve_project_path(path_value: str) -> str:
     return str(p if p.is_absolute() else (PROJECT_ROOT / p).resolve())
 
 
-# Default video source to 0 (laptop camera) as requested
+# Default video source to test video instead of webcam
 VIDEO_SOURCE = _resolve_project_path(os.environ.get("VIDEO_SOURCE", "0"))
 WEIGHTS_PATH = _resolve_project_path(
     os.environ.get("WEIGHTS_PATH", "outputs/runs/helmet_train/phase1_lr0.00104/weights/best.pt")
@@ -34,6 +36,7 @@ PLATE_CONF = float(os.environ.get("PLATE_CONF", "0.7"))
 
 if torch.cuda.is_available():
     DEVICE = "cuda"
+    torch.backends.cudnn.enabled = False  # Fix for 'GET was unable to find an engine' error
     print(" Using GPU (CUDA)")
 elif torch.backends.mps.is_available():
     DEVICE = "mps"
@@ -142,22 +145,31 @@ class ThreadedCamera:
                 current_frame_ids = set()
 
                 for r in res_list:
-                    if not r.boxes or r.boxes.id is None: continue
-                    ids = r.boxes.id.int().cpu().tolist()
+                    if not r.boxes: continue
+                    
+                    has_ids = r.boxes.id is not None
+                    ids = r.boxes.id.int().cpu().tolist() if has_ids else [-1] * len(r.boxes)
+                    
                     for box, tid in zip(r.boxes, ids):
                         coords = box.xyxy[0].tolist()
                         conf = float(box.conf[0])
                         label = CLASS_NAMES[int(box.cls[0])]
                         bbox = tuple(map(int, coords))
-                        current_frame_ids.add(tid)
-                        new_display_items.append({"label": label, "bbox": bbox, "conf": conf, "id": tid})
+                        
+                        if tid != -1:
+                            current_frame_ids.add(tid)
+                        
+                        display_id = tid if tid != -1 else "?"
+                        new_display_items.append({"label": label, "bbox": bbox, "conf": conf, "id": display_id})
 
-                        if label == "rider" and conf >= RIDER_CONF:
-                            riders.append((bbox, conf, tid))
-                        elif label == "without helmet" and conf >= NO_HELMET_CONF:
-                            no_helmets.append((bbox, conf))
-                        elif label == "number plate" and conf >= PLATE_CONF:
-                            plates.append((bbox, conf))
+                        # Tracking logic requires a valid ID
+                        if tid != -1:
+                            if label == "rider" and conf >= RIDER_CONF:
+                                riders.append((bbox, conf, tid))
+                            elif label == "without helmet" and conf >= NO_HELMET_CONF:
+                                no_helmets.append((bbox, conf))
+                            elif label == "number plate" and conf >= PLATE_CONF:
+                                plates.append((bbox, conf))
 
                 for rider_bbox, r_conf, tid in riders:
                     if tid in self.processed_ids: continue
