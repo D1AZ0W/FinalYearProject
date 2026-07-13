@@ -152,7 +152,7 @@ class FineCaseStore:
                 query += " AND id = %s"
                 params.append(int(clean_search))
             else:
-                query += " AND plate_number LIKE %s"
+                query += " AND plate_number ILIKE %s"
                 params.append(f"%{search_query}%")
         
         if date_filter:
@@ -176,7 +176,7 @@ class FineCaseStore:
         params = []
         
         if search_query:
-            query += " WHERE plate_number LIKE %s OR person_name LIKE %s"
+            query += " WHERE plate_number ILIKE %s OR person_name ILIKE %s"
             params.append(f"%{search_query}%")
             params.append(f"%{search_query}%")
             

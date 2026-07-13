@@ -45,3 +45,5 @@ Thumbs.db
 docs/
 
 assets/
+
+node_modules

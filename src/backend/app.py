@@ -4,7 +4,7 @@ from functools import wraps
 
 import cv2
 import torch
-from flask import Flask, Response, abort, redirect, render_template, request, send_from_directory, url_for, session, flash
+from flask import Flask, Response, abort, jsonify, request, send_from_directory, session
 from ultralytics import YOLO
 
 from fine_capture import FineCandidate, FineCaseStore
@@ -12,7 +12,7 @@ from fine_capture import FineCandidate, FineCaseStore
 torch.backends.mkldnn.enabled = False
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent  # src/backend/ -> src/ -> project_root/
 PREDICTIONS_DIR = (PROJECT_ROOT / "outputs" / "predictions").resolve()
 
 
@@ -37,9 +37,6 @@ if torch.cuda.is_available():
     DEVICE = "cuda"
     torch.backends.cudnn.enabled = False  # Fix for 'GET was unable to find an engine' error
     print(" Using GPU (CUDA)")
-elif torch.backends.mps.is_available():
-    DEVICE = "mps"
-    print(" Using Apple MPS")
 else:
     DEVICE = "cpu"
     print(" Using CPU (No GPU detected)")
@@ -61,6 +58,24 @@ def login_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated_function
+
+
+def api_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "logged_in" not in session:
+            return jsonify(success=False, error="Unauthorized"), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def make_json_response(success: bool, data=None, error=None, status=200):
+    payload = {"success": success}
+    if data is not None:
+        payload["data"] = data
+    if error is not None:
+        payload["error"] = error
+    return jsonify(payload), status
 
 
 def _inside(inner, outer, margin=10):
@@ -223,79 +238,71 @@ def _media_url(abs_path: str) -> str:
 
 # --- Routes ---
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        # Specific values as requested by user
-        if username == "admin" and password == "admin":
-            session["logged_in"] = True
-            return redirect(url_for("index"))
-        else:
-            flash("Invalid credentials. Personnel only.")
-    return render_template("login.html")
+@app.route("/api/auth/status", methods=["GET"])
+def api_auth_status():
+    return make_json_response(True, {"authenticated": "logged_in" in session})
 
 
-@app.route("/logout")
-def logout():
+@app.route("/api/auth/login", methods=["POST"])
+def api_auth_login():
+    payload = request.get_json(silent=True) or {}
+    username = payload.get("username")
+    password = payload.get("password")
+
+    if username == "admin" and password == "admin":
+        session["logged_in"] = True
+        return make_json_response(True, {"success": True})
+
+    return make_json_response(False, error="Invalid credentials."), 401
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_auth_logout():
     session.pop("logged_in", None)
-    return redirect(url_for("login"))
+    return make_json_response(True, {"logged_out": True})
 
 
-@app.route("/")
-@login_required
-def index():
-    src = request.args.get("source", VIDEO_SOURCE)
-    return render_template("index.html", current=src)
-
-
-@app.route("/dashboard")
-@login_required
-def dashboard():
+@app.route("/api/dashboard", methods=["GET"])
+@api_login_required
+def api_dashboard():
     search_query = request.args.get("search", "")
     date_filter = request.args.get("date", "")
     rows = store.get_pending_cases(limit=500, search_query=search_query, date_filter=date_filter)
     for row in rows:
         row["plate_image_url"] = _media_url(row.get("plate_path", ""))
         row["person_image_url"] = _media_url(row.get("person_path", ""))
-    return render_template("dashboard.html", rows=rows)
+
+    summary = {
+        "pending_count": len(rows),
+        "latest_case_id": rows[0]["id"] if rows else None,
+    }
+    return make_json_response(True, {"fines": rows, "summary": summary})
 
 
-@app.route("/records")
-@login_required
-def records():
-    # Use 'plate' as the general search term. 
-    # If it's a generic placeholder, we show all records instead of an empty table.
-    search_query = request.args.get("plate", "").strip()
-    if search_query.upper() in ["ID REQUIRED", "ID REQ", "PENDING_OCR", "MANUAL ID REQUIRED"]:
-        search_query = ""
-
-    plate_img = request.args.get("plate_img", "")
-    case_id = request.args.get("case_id", "")
-    all_recs = store.get_all_records(search_query=search_query)
-    return render_template("records.html", 
-                           records=all_recs, 
-                           lookup_plate_img=plate_img, 
-                           case_id=case_id)
+@app.route("/api/records", methods=["GET"])
+@api_login_required
+def api_records():
+    search_query = request.args.get("search", "")
+    rows = store.get_all_records(search_query=search_query)
+    return make_json_response(True, {"records": rows})
 
 
-@app.post("/assign_fine/<int:person_id>/<int:case_id>")
-@login_required
-def assign_fine(person_id: int, case_id: int):
+@app.route("/api/dashboard/close/<int:case_id>", methods=["POST"])
+@api_login_required
+def api_close_case(case_id: int):
+    closed = store.close_case(case_id)
+    if closed:
+        return make_json_response(True, {"closed": True})
+    return make_json_response(False, error="Case not found or already closed."), 404
+
+
+@app.route("/api/assign_fine/<int:person_id>/<int:case_id>", methods=["POST"])
+@api_login_required
+def api_assign_fine(person_id: int, case_id: int):
     success = store.assign_fine(person_id, case_id)
     if success:
-        flash("Fine assigned and case closed successfully!")
-    else:
-        flash("Failed to assign fine. Record not found.")
-    return redirect(url_for("dashboard"))
-
-
-@app.post("/dashboard/close/<int:case_id>")
-@login_required
-def close_case(case_id: int):
-    store.close_case(case_id)
-    return redirect(url_for("dashboard"))
+        return make_json_response(True, {"assigned": True})
+    return make_json_response(False, error="Failed to assign fine."), 400
 
 
 @app.route("/media/<path:filename>")
@@ -315,7 +322,7 @@ def video_feed():
 
 
 @app.route("/stream_notifications")
-@login_required
+@api_login_required
 def stream_notifications():
     def stream():
         q = queue.Queue(maxsize=20)
