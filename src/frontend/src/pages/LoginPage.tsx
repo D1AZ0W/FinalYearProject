@@ -42,7 +42,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-7 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-500 text-lg font-semibold text-white">
-            H
+            <img className='h-10 w-10 rounded-2xl' src="/favicon.png" />
           </div>
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-sky-600">Access Control</p>

@@ -23,7 +23,7 @@ export default function Layout() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-600 to-cyan-500 text-lg font-semibold text-white shadow-lg shadow-sky-100">
-              H
+              <img className='h-10 w-10 rounded-2xl' src="/favicon.png" />
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Kathmandu Valley Traffic Police</p>
