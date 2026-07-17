@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { assignFine, getRecords } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type RecordRow = {
   id: number;
@@ -74,31 +78,31 @@ export default function RecordsPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.06)] ">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-lg font-semibold text-slate-900">Manual Record Lookup</h3>
-            <p className="mt-2 text-sm text-slate-600">Search by plate number or citizen name and confirm the match directly in the registry.</p>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle>Manual Record Lookup</CardTitle><CardDescription>Search by plate number or citizen name and confirm the match directly in the registry.</CardDescription></CardHeader>
+            <CardContent className="space-y-2">
             <div className="mt-3 space-y-2">
-              <input
+              <Input
                 value={searchTerm}
                 onChange={event => setSearchTerm(event.target.value)}
                 placeholder="Plate or owner name"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-sky-500"
               />
-              <button
+              <Button
                 type="button"
                 onClick={handleSearch}
                 disabled={loading}
-                className="w-full rounded-xl bg-sky-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full"
               >
                 {loading ? 'Searching…' : 'Lookup'}
-              </button>
+              </Button>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-amber-50 p-4">
-            <h3 className="text-lg font-semibold text-slate-900">Plate Evidence</h3>
-            <p className="mt-2 text-sm text-slate-700">A large plate preview appears here for the selected case lookup.</p>
+          <Card className="border-sky-200 bg-gradient-to-br from-sky-50 to-amber-50">
+            <CardHeader><CardTitle>Plate Evidence</CardTitle><CardDescription>A large plate preview appears here for the selected case lookup.</CardDescription></CardHeader>
+            <CardContent>
             <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3">
               {plateImageUrl ? (
                 <img src={plateImageUrl} alt="Number plate evidence" className="h-44 w-full rounded-xl object-cover" />
@@ -108,58 +112,45 @@ export default function RecordsPage() {
                 </div>
               )}
             </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_12px_35px_rgba(15,23,42,0.06)]">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">Registered Citizens & Assigned Fines</h2>
-            <p className="text-sm text-slate-500">Official data for enforcement review</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm text-slate-700">
-              <thead className="bg-slate-50 text-left text-slate-500">
+        <Card className="overflow-hidden">
+          <CardHeader><CardTitle>Registered Citizens & Assigned Fines</CardTitle><CardDescription>Official data for enforcement review</CardDescription></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-slate-50 text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Plate</th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Violations</th>
-                  <th className="px-4 py-3">Total Due</th>
-                  <th className="px-4 py-3">Action</th>
+                  <TableHead>Plate</TableHead><TableHead>Name</TableHead><TableHead>Violations</TableHead><TableHead>Total Due</TableHead><TableHead>Action</TableHead>
                 </tr>
-              </thead>
-              <tbody>
+              </TableHeader>
+              <TableBody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">Loading records…</td>
-                  </tr>
+                  <TableRow><TableCell colSpan={5} className="py-6 text-center text-muted-foreground">Loading records…</TableCell></TableRow>
                 ) : records.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">No matching records found.</td>
-                  </tr>
+                  <TableRow><TableCell colSpan={5} className="py-6 text-center text-muted-foreground">No matching records found.</TableCell></TableRow>
                 ) : (
                   records.map(record => (
-                    <tr key={record.id} className="border-t border-slate-200 bg-white">
-                      <td className="px-4 py-3 font-semibold text-slate-900">{record.plate_number}</td>
-                      <td className="px-4 py-3">{record.person_name}</td>
-                      <td className="px-4 py-3">{record.violation_count}</td>
-                      <td className="px-4 py-3">Rs. {record.total_fine_due}</td>
-                      <td className="px-4 py-3">
-                        <button
+                    <TableRow key={record.id}>
+                      <TableCell className="font-semibold">{record.plate_number}</TableCell><TableCell>{record.person_name}</TableCell><TableCell>{record.violation_count}</TableCell><TableCell>Rs. {record.total_fine_due}</TableCell>
+                      <TableCell>
+                        <Button
                           type="button"
                           onClick={() => handleAssignFine(record.id)}
                           disabled={assigningId === record.id}
-                          className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          size="sm"
                         >
                           {assigningId === record.id ? 'Assigning…' : 'Assign Fine'}
-                        </button>
-                      </td>
-                    </tr>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
