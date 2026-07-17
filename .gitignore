@@ -47,3 +47,4 @@ docs/
 assets/
 
 node_modules
+*.tsbuildinfo
