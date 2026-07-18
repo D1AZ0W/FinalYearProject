@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import StatisticCard from '../components/StatisticCard';
-import { closeCase, getPendingFines } from '../lib/api';
+import { closeCase, getPendingFines, type DashboardResponse } from '../lib/api';
+import { useFetch } from '../hooks/useFetch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,38 +20,29 @@ type FineRow = {
   status: string;
 };
 
+function normaliseFines(response: DashboardResponse): FineRow[] {
+  return response.fines.map((row: any) => ({
+    id: row.id,
+    ts: row.ts,
+    plate_image_url: row.plate_image_url || '/placeholder_plate.jpg',
+    person_image_url: row.person_image_url || '/placeholder_person.jpg',
+    overall_conf: Number(row.overall_conf || 0),
+    plate_number: row.plate_number || 'Unknown',
+    status: row.status || 'Pending',
+  }));
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [fineRows, setFineRows] = useState<FineRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState({ pending_count: 0, latest_case_id: null as number | null });
   const [closingId, setClosingId] = useState<number | null>(null);
   const [imageModal, setImageModal] = useState<{ open: boolean; src: string | null }>({ open: false, src: null });
 
-  const refreshFines = async () => {
-    setLoading(true);
-    try {
-      const response = await getPendingFines();
-      setFineRows(response.fines.map((row: any) => ({
-        id: row.id,
-        ts: row.ts,
-        plate_image_url: row.plate_image_url || '/placeholder_plate.jpg',
-        person_image_url: row.person_image_url || '/placeholder_person.jpg',
-        overall_conf: Number(row.overall_conf || 0),
-        plate_number: row.plate_number || 'Unknown',
-        status: row.status || 'Pending',
-      })));
-      setSummary(response.summary);
-    } catch (error) {
-      setFineRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Stable fetcher — useCallback ensures useFetch doesn't re-run on every render
+  const fetcher = useCallback(() => getPendingFines(), []);
+  const { data, loading, error, refresh } = useFetch<DashboardResponse>(fetcher);
 
-  useEffect(() => {
-    refreshFines();
-  }, []);
+  const fineRows: FineRow[] = data ? normaliseFines(data) : [];
+  const summary = data?.summary ?? { pending_count: 0, latest_case_id: null };
 
   const handleLookup = (query: string, plateImageUrl?: string, caseId?: number) => {
     const trimmed = query.trim();
@@ -58,9 +50,7 @@ export default function DashboardPage() {
       toast.info('Select a fine to search the government records.');
       return;
     }
-
-    const nextSearch = encodeURIComponent(trimmed);
-    navigate(`/records?search=${nextSearch}`, {
+    navigate(`/records?search=${encodeURIComponent(trimmed)}`, {
       state: { lookupQuery: trimmed, plateImageUrl, caseId },
     });
   };
@@ -70,8 +60,8 @@ export default function DashboardPage() {
     try {
       await closeCase(caseId);
       toast.success(`Case #${caseId} has been closed.`);
-      await refreshFines();
-    } catch (error) {
+      refresh();
+    } catch {
       toast.error('Unable to close this case right now.');
     } finally {
       setClosingId(null);
@@ -101,6 +91,8 @@ export default function DashboardPage() {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">Loading cases…</TableCell></TableRow>
+              ) : error ? (
+                <TableRow><TableCell colSpan={7} className="py-6 text-center text-red-500">Failed to load cases: {error}</TableCell></TableRow>
               ) : fineRows.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No pending fines found.</TableCell></TableRow>
               ) : (
@@ -118,25 +110,14 @@ export default function DashboardPage() {
                         <img className="h-10 w-16 rounded-md object-cover" src={row.person_image_url} alt="Rider" />
                       </Button>
                     </TableCell>
-                    <TableCell>{Number(row.overall_conf).toFixed(2)}</TableCell>
+                    <TableCell>{row.overall_conf.toFixed(2)}</TableCell>
                     <TableCell><Badge variant="secondary" className="bg-amber-50 text-amber-700">{row.status}</Badge></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          onClick={() => handleLookup(row.plate_number, row.plate_image_url, row.id)}
-                          variant="outline"
-                          size="sm"
-                        >
+                        <Button type="button" onClick={() => handleLookup(row.plate_number, row.plate_image_url, row.id)} variant="outline" size="sm">
                           Lookup
                         </Button>
-                        <Button
-                          type="button"
-                          onClick={() => handleCloseCase(row.id)}
-                          disabled={closingId === row.id}
-                          variant="destructive"
-                          size="sm"
-                        >
+                        <Button type="button" onClick={() => handleCloseCase(row.id)} disabled={closingId === row.id} variant="destructive" size="sm">
                           {closingId === row.id ? 'Closing…' : 'Close'}
                         </Button>
                       </div>
@@ -152,7 +133,7 @@ export default function DashboardPage() {
       <Dialog open={imageModal.open} onOpenChange={open => !open && setImageModal({ open: false, src: null })}>
         <DialogContent className="max-w-4xl p-3">
           <DialogHeader className="sr-only"><DialogTitle>Case image</DialogTitle><DialogDescription>Full-size case evidence</DialogDescription></DialogHeader>
-          {imageModal.src ? <img src={imageModal.src} alt="Full case evidence" className="max-h-[80vh] w-full rounded-lg object-contain" /> : null}
+          {imageModal.src && <img src={imageModal.src} alt="Full case evidence" className="max-h-[80vh] w-full rounded-lg object-contain" />}
         </DialogContent>
       </Dialog>
     </div>

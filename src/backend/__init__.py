@@ -1,26 +1,31 @@
-import os
+"""Flask application factory."""
+from __future__ import annotations
 
-import torch
 from flask import Flask
-from ultralytics import YOLO
 
-from backend.config import PROJECT_ROOT, WEIGHTS_PATH
+from backend.config import FLASK_SECRET_KEY, PROJECT_ROOT
+from backend.detection.detector import get_device, load_model
 from backend.routes import register_routes
 from backend.services.fine_store import FineCaseStore
 
 
 def create_app() -> Flask:
-    """Create the HTTP application and register infrastructure dependencies."""
-    torch.backends.mkldnn.enabled = False
+    """Create and configure the Flask application."""
     app = Flask(__name__)
-    app.secret_key = os.environ.get("FLASK_SECRET_KEY", "helm_detect_secret_key")
+    app.secret_key = FLASK_SECRET_KEY
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    if device == "cuda":
-        torch.backends.cudnn.enabled = False
+    # Initialise shared dependencies and attach them to app.extensions
+    # so blueprints can access them via current_app.extensions[...].
+    app.extensions["detector_device"] = get_device()
+
+    try:
+        app.extensions["detector_model"] = load_model()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to load YOLO weights. Check WEIGHTS_PATH in config or env.\n  → {exc}"
+        ) from exc
 
     app.extensions["fine_store"] = FineCaseStore(PROJECT_ROOT)
-    app.extensions["detector_model"] = YOLO(WEIGHTS_PATH)
-    app.extensions["detector_device"] = device
+
     register_routes(app)
     return app
